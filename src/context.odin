@@ -89,22 +89,7 @@ init_ctx :: proc(ctx: ^Context, allocator := context.allocator) -> (ok: bool) {
 		}
 	}
 
-	sort.sort(sort.Interface {
-		len = proc(it: sort.Interface) -> int {
-			c := cast(^Context)it.collection
-			return len(c.lists)
-		},
-		less = proc(it: sort.Interface, i, j: int) -> bool {
-			c := cast(^Context)it.collection
-			return c.lists[i].id < c.lists[j].id
-		},
-		swap = proc(it: sort.Interface, i, j: int) {
-			c := cast(^Context)it.collection
-			c.lists[i], c.lists[j] = c.lists[j], c.lists[i]
-		},
-		collection = ctx,
-	})
-
+	sort_lists(ctx)
 
 	if len(ctx.lists) > 0 && len(ctx.lists[0].items) == 0 {
 		ctx.cursor.y = -1
@@ -222,6 +207,24 @@ destroy_list :: proc(list: ^List) {
 	free(list)
 }
 
+sort_lists :: proc(ctx: ^Context) {
+	sort.sort(sort.Interface {
+		len = proc(it: sort.Interface) -> int {
+			c := cast(^Context)it.collection
+			return len(c.lists)
+		},
+		less = proc(it: sort.Interface, i, j: int) -> bool {
+			c := cast(^Context)it.collection
+			return c.lists[i].id < c.lists[j].id
+		},
+		swap = proc(it: sort.Interface, i, j: int) {
+			c := cast(^Context)it.collection
+			c.lists[i], c.lists[j] = c.lists[j], c.lists[i]
+		},
+		collection = ctx,
+	})
+}
+
 update_cursor :: proc(ctx: ^Context) {
 	if ctx.cmd.active || ctx.selected_item != nil {
 		return
@@ -256,6 +259,11 @@ update_cursor :: proc(ctx: ^Context) {
 
 		current_list := ctx.lists[ctx.cursor.x]
 		next_list := ctx.lists[next_cursor.x]
+
+		if next_cursor.y == -1 {
+			swap_list_positions(ctx, next_cursor, current_list, next_list)
+			return
+		}
 
 		item := current_list.items[ctx.cursor.y]
 		ordered_remove(&current_list.items, ctx.cursor.y)
@@ -311,4 +319,10 @@ refresh_layout :: proc(ctx: ^Context, frame_w, frame_h: f32) {
 			h = frame_h - (margin * 2),
 		)
 	}
+}
+
+swap_list_positions :: proc(ctx: ^Context, next_cursor: [2]int, a, b: ^List) {
+	a.id, b.id = b.id, a.id
+	sort_lists(ctx)
+	ctx.cursor = next_cursor
 }
