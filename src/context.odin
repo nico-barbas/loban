@@ -13,23 +13,24 @@ DEFAULT_CANVAS_NAME :: "./canvas.json"
 MAX_SCALE :: 4
 
 Context :: struct {
-	using conf:    Config,
-	lists:         [dynamic]^List,
-	list_lookup:   map[string]^List,
-	selected_item: Maybe(Item),
+	using conf:        Config,
+	lists:             [dynamic]^List,
+	list_lookup:       map[string]^List,
+	selected_item:     Maybe(Item),
 
 	// Cmd handling
-	cmd:           Input,
-	cmd_lexer:     Lexer,
-	cursor:        [2]int,
+	cmd:               Input,
+	cmd_auto_complete: [dynamic]string,
+	cmd_lexer:         Lexer,
+	cursor:            [2]int,
 
 	// Windows
-	item_window:   Window,
+	item_window:       Window,
 
 	// Rendering states
-	ui:            loui.Context,
-	font:          ^logf.Font,
-	scale:         f32,
+	ui:                loui.Context,
+	font:              ^logf.Font,
+	scale:             f32,
 }
 
 Item :: struct {
@@ -95,6 +96,7 @@ init_ctx :: proc(ctx: ^Context, allocator := context.allocator) -> (ok: bool) {
 		ctx.cursor.y = -1
 	}
 
+	ctx.cmd_auto_complete = make([dynamic]string, 0, len(cmd_str))
 	ctx.scale = 1
 
 	ctx.item_window = make_window(
@@ -166,6 +168,8 @@ destroy_ctx :: proc(ctx: ^Context, allocator := context.allocator) {
 	if err == nil {
 		os.write_entire_file("./canvas.json", out)
 	}
+
+	delete(ctx.cmd_auto_complete)
 
 
 	delete(ctx.lists)
@@ -302,6 +306,103 @@ update_selection :: proc(ctx: ^Context) {
 	if .Just_Pressed in logf.key_state(.Enter) && ctx.cursor.y >= 0 {
 		ctx.selected_item = ctx.lists[ctx.cursor.x].items[ctx.cursor.y]
 	}
+}
+
+update_gutter :: proc(ctx: ^Context, key_pressed: []rune, dt: f32) {
+	k := key_pressed
+	left_shift := .Pressed in logf.key_state(.Left_Shift)
+
+	changed: bool
+	if .Just_Pressed in logf.key_state(.Semicolon) && left_shift {
+		ctx.cmd.active = true
+		k = key_pressed[1:]
+	} else if .Just_Pressed in logf.key_state(.Escape) {
+		ctx.cmd.count = 0
+		ctx.cmd.active = false
+		changed = true
+	}
+
+	changed |= update_input(&ctx.cmd, k, dt)
+
+	if changed {
+		clear(&ctx.cmd_auto_complete)
+
+		input_str := input_string(&ctx.cmd)
+		if len(input_str) == 0 {
+			return
+		}
+
+		for cmd in cmd_str {
+			if strings.has_prefix(cmd, input_str) {
+				append(&ctx.cmd_auto_complete, cmd)
+			}
+		}
+		fmt.println(ctx.cmd_auto_complete)
+	}
+}
+
+render_gutter :: proc(ctx: ^Context, gutter_rect: loui.Rect) {
+	b := ctx.ui.border
+	ctx.ui.border = {}
+	ctx.ui.background.clr = ctx.gutter_clr
+	defer {
+		ctx.ui.background.clr = ctx.background_clr
+		ctx.ui.border = b
+	}
+
+	loui.begin_window(&ctx.ui, gutter_rect)
+	if ctx.cmd.active {
+		ctx.ui.text.align_style = .Left
+		defer ctx.ui.text.align_style = .Center
+		str := input_string(&ctx.cmd)
+		text_bounds := loui.sized_label(&ctx.ui, gutter_rect, str)
+
+		if ctx.cmd.blink {
+			face := ctx.font.faces[ctx.ui.text.size]
+
+			carret_rect := loui.make_rect(
+				text_bounds.x + text_bounds.width + 2,
+				text_bounds.y,
+				8,
+				text_bounds.height + abs(f32(face.descent)),
+			)
+			logf.draw_rectangle(ctx.ui.batch, carret_rect, ctx.ui.text.clr)
+		}
+	}
+	loui.end_window(&ctx.ui)
+
+
+	if len(ctx.cmd_auto_complete) == 0 {
+		return
+	}
+
+	align := ctx.ui.text.align_style
+	ctx.ui.text.align_style = .Left
+	defer ctx.ui.text.align_style = align
+
+	AUTO_COMPLETE_WIDTH :: 250
+	SUGGESTION_HEIGHT :: 25
+	auto_complete_height := f32(len(ctx.cmd_auto_complete) * SUGGESTION_HEIGHT)
+	ctx.ui.background.clr = ctx.accent_clr
+	complete_rect := loui.make_rect(
+		gutter_rect.x,
+		gutter_rect.y - auto_complete_height,
+		AUTO_COMPLETE_WIDTH,
+		auto_complete_height,
+	)
+
+	loui.begin_window(&ctx.ui, complete_rect)
+
+	accumulator := 0
+	loui.cut_rect_margin_h(&complete_rect, 3)
+	for suggestion in ctx.cmd_auto_complete {
+
+		loui.label(&ctx.ui, loui.cut_rect(&complete_rect, .Cut_Top, SUGGESTION_HEIGHT), suggestion)
+		accumulator += SUGGESTION_HEIGHT
+
+	}
+
+	loui.end_window(&ctx.ui)
 }
 
 refresh_layout :: proc(ctx: ^Context, frame_w, frame_h: f32) {

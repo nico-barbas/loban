@@ -216,9 +216,10 @@ measure_text :: proc(
 		for c in text {
 			glyph := face.glyphs[c]
 			width += f32(glyph.advance)
-			height = max(height, f32(glyph.height))
+			// height = max(height, f32(glyph.height))
 		}
 	}
+	height = f32(face.ascent)
 	return
 }
 

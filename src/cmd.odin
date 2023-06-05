@@ -2,6 +2,8 @@ package main
 
 import "core:fmt"
 
+cmd_str := [?]string{"create", "update", "delete"}
+
 exec_cmd :: proc(ctx: ^Context) {
 	cmd := ctx.cmd.buf[1:ctx.cmd.count]
 	init_lexer(&ctx.cmd_lexer, string(cmd))

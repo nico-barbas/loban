@@ -45,7 +45,7 @@ main :: proc() {
 		update_ctx(&ctx, app.elapsed_time)
 		update_cursor(&ctx)
 		update_selection(&ctx)
-		update_input(&ctx.cmd, char_pressed, app.elapsed_time)
+		update_gutter(&ctx, char_pressed, app.elapsed_time)
 		if ctx.cmd.active && .Just_Pressed in logf.key_state(.Enter) {
 			exec_cmd(&ctx)
 			reset_input(&ctx.cmd)
@@ -65,17 +65,6 @@ main :: proc() {
 		b := ctx.ui.border
 		ctx.ui.border = {}
 
-		ctx.ui.background.clr = ctx.gutter_clr
-		loui.begin_window(&ctx.ui, gutter)
-		if ctx.cmd.active {
-			ctx.ui.text.align_style = .Left
-			defer ctx.ui.text.align_style = .Center
-			loui.label(&ctx.ui, gutter, string(ctx.cmd.buf[:ctx.cmd.count]))
-		}
-		loui.end_window(&ctx.ui)
-
-
-		ctx.ui.background.clr = ctx.background_clr
 		loui.begin_window(&ctx.ui, main_panel)
 
 		info_panel := loui.cut_rect(&main_panel, .Cut_Top, 40)
@@ -136,6 +125,8 @@ main :: proc() {
 				}
 			}
 		}
+
+		render_gutter(&ctx, gutter)
 
 		if ctx.selected_item != nil {
 			render_window(&ctx.item_window, &ctx.ui)

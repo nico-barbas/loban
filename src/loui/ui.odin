@@ -219,6 +219,25 @@ align_text :: proc(ctx: ^Context, text: string, rect: logf.Rectangle) -> logf.Ve
 }
 
 @(private)
+align_text_sized :: proc(ctx: ^Context, text: string, rect: logf.Rectangle) -> (bounds: Rect) {
+	t := &ctx.text
+
+	bounds.width, bounds.height = logf.measure_text(t.font, text, int(t.size))
+	switch t.align_style {
+	case .Left:
+		bounds.x = rect.x
+	case .Center:
+		bounds.x = rect.x + (rect.width - bounds.width) / 2
+	case .Right:
+		bounds.x = rect.x + (rect.width - bounds.width)
+	}
+
+
+	bounds.y = math.floor(rect.y + (rect.height - bounds.height) / 2)
+	return
+}
+
+@(private)
 align_text_fit :: proc(
 	ctx: ^Context,
 	text: string,
@@ -305,6 +324,24 @@ boxed_label :: proc(ctx: ^Context, rect: Rect, text: string, draw_bg := false) {
 
 	logf.draw_text(ctx.batch, ctx.text.font, out, text_origin, ctx.text.size, ctx.text.clr)
 	logf.draw_text(ctx.batch, ctx.text.font, "..", suffix_origin, ctx.text.size, ctx.text.clr)
+}
+
+sized_label :: proc(ctx: ^Context, rect: Rect, text: string, draw_bg := false) -> Rect {
+	text_bounds := align_text_sized(ctx, text, rect)
+
+	if draw_bg {
+		draw_background(ctx, rect)
+	}
+	logf.draw_text(
+		ctx.batch,
+		ctx.text.font,
+		text,
+		{text_bounds.x, text_bounds.y},
+		ctx.text.size,
+		ctx.text.clr,
+	)
+
+	return text_bounds
 }
 
 icon :: proc(ctx: ^Context, rect: Rect, image: Image, src_rect: Rect) {
